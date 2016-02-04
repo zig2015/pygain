@@ -9,9 +9,12 @@ try:
 except ImportError:
     import zipfile
 try:
-    import cStringIO as StringIO
+    import cStringIO.StringIO as StringIO
 except ImportError:
-    from io import BytesIO as StringIO
+    try:
+        import StringIO.StringIO as StringIO
+    except ImportError:
+        from io import BytesIO as StringIO
 
 # the module's identifier, use it to hotfix
 __i_am_pygain_module__ = "__i_am_pygain_module__"
@@ -153,7 +156,7 @@ class __Importer__(object):
             if content is not None:
                 # zip pack, eval __init__
                 if suffix == "zip":  ## /a.zip, execute a.zip/__init__.py
-                    zippack = {"zip": zipfile.ZipFile(StringIO.StringIO(content)), "kwargs": aliasctx["kwargs"]}
+                    zippack = {"zip": zipfile.ZipFile(StringIO(content)), "kwargs": aliasctx["kwargs"]}
                     self.__packs__[name] = zippack
                     for initsuffix in suffixes:
                         if initsuffix != "zip":
@@ -205,6 +208,11 @@ class __Importer__(object):
             return packfile.open(path, "r", packctx.get("zippw", None))
         except KeyError:
             return None
+        except TypeError:
+            try:
+                return packfile.open(path, "r", packctx.get("zippw", None).encode())
+            except KeyError:
+                return None
 
     def _fetch_file_from_remote(self, url):
         print("fetch file from remote url:", url)
