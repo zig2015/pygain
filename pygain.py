@@ -16,6 +16,8 @@ except ImportError:
     except ImportError:
         from io import BytesIO as StringIO
 
+__we_are_debuging__ = False
+
 # the module's identifier, use it to hotfix
 __i_am_pygain_module__ = "__i_am_pygain_module__"
 
@@ -152,7 +154,7 @@ class __Importer__(object):
         ## import alias
         for suffix in suffixes:
             url = urlhead + "." + suffix
-            content = self._fetch_file_from_remote(url)
+            content = self._fetch_file_from_remote(url, aliasctx.get("kwargs", {}))
             if content is not None:
                 # zip pack, eval __init__
                 if suffix == "zip":  ## /a.zip, execute a.zip/__init__.py
@@ -181,7 +183,7 @@ class __Importer__(object):
         for initsuffix in suffixes:
             if initsuffix != "zip":
                 initurl = urlhead + "/__init__." + initsuffix
-                initcontent = self._fetch_file_from_remote(initurl)
+                initcontent = self._fetch_file_from_remote(initurl, aliasctx.get("kwargs", {}))
                 if initcontent is not None:
                     # a package
                     module.__file__ = initurl
@@ -214,10 +216,11 @@ class __Importer__(object):
             except KeyError:
                 return None
 
-    def _fetch_file_from_remote(self, url):
+    def _fetch_file_from_remote(self, url, kwargs):
         print("fetch file from remote url:", url)
+        httpheaders = kwargs.get("httpheaders", None)
         try:
-            r = requests.get(url)
+            r = requests.get(url, headers=httpheaders)
             if r.status_code == 200:
                 return r.content
             else:
@@ -235,11 +238,14 @@ def gain(alias, baseurl, suffixes, **kwargs):
     :param alias: 用于import时的别名
     :param baseurl: 别名引入的基址url
     :param suffixes: 支持的后缀模式
-    :param kwargs: 附加参数,比如zip解压密码等...
-                    zip: zippw(password)
+    :param kwargs: 附加参数,比如
+                    zip解压密码: zippw(password)
+                    http请求头: httpheaders
     :return: None
     // en-us
     """
+    if __we_are_debuging__ is True:
+        print("gain - alias:", alias, "|baseurl:", baseurl, "|suffixes:", suffixes, "|kwargs:", kwargs)
     aliases = __importer__.aliases
     if alias in aliases:
         return None
