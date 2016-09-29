@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-# @author zig(shawhen2012@hotmail.com)
+# @author zig(remember1637@gmail.com)
 
 import sys
 import types
+import marshal
 import requests
 try:
     import czipfile as zipfile
@@ -54,7 +55,8 @@ class __Importer__(object):
         # check whether the module's name starts with a alias
         for alias in self.aliases:
             if name.startswith(alias):
-                print("got spec for name:", name, "fullpath:", fullpath)
+                if __we_are_debuging__:
+                    print("|-got spec for name:", name, "fullpath:", fullpath)
                 spec = Spec(name, self)
                 self.__specs__[name] = spec
                 return spec
@@ -71,7 +73,8 @@ class __Importer__(object):
         return self.find_spec(name, fullpath)
 
     def create_module(self, spec):
-        print("create module for spec:", spec)
+        if __we_are_debuging__:
+            print("|-create module for spec:", spec)
         module = types.ModuleType(spec.name)
         # init module attributes
         module.__name__ = spec.name
@@ -81,11 +84,13 @@ class __Importer__(object):
         module.__path__ = spec.submodule_search_locations
         module.__file__ = spec.origin
         module.__cached__ = spec.cached
-        print("created module:", module)
+        if __we_are_debuging__:
+            print("|-created module:", module)
         return module
 
     def exec_module(self, module):
-        print("exec module for module:", module)
+        if __we_are_debuging__:
+            print("|-exec module for module:", module)
         spec = module.__spec__
         name = spec.name
 
@@ -99,12 +104,13 @@ class __Importer__(object):
         else:  # this must be a alias package
             purl = aliasctx["baseurl"]
         urlhead = purl + "/" + nameparts[-1]
-        print(name, "'s urlhead:", urlhead)
+        if __we_are_debuging__:
+            print("|-", name, "'s urlhead:", urlhead)
 
-        ## import alias.a
+        # # import alias.a
         suffixes = aliasctx["suffixes"]
         # do i have a parent container(zip)?
-        ## import alias.a.b
+        # # import alias.a.b
         for namei in range(1, len(nameparts)):
             packname = ".".join(nameparts[0:namei])  # container's name  ## alias
             if packname in self.__packs__:  # this is my parent container
@@ -112,31 +118,32 @@ class __Importer__(object):
                 # search in this container
                 for suffix in suffixes:
                     path = "/".join(nameparts[namei:]) + "." + suffix  ## b.zip; b.py
-                    ## (/a.zip exists, b.zip/b.py...)
+                    # # (/a.zip exists, b.zip/b.py...)
                     contentfile = self._fetch_file_from_pack(path, pack["zip"], pack["kwargs"])
                     if contentfile is not None:
                         # zip pack, eval __init__
-                        if suffix == "zip":  ## /b.zip, execute a.zip/b.zip/__init__.py
+                        if suffix == "zip":  # # /b.zip, execute a.zip/b.zip/__init__.py
                             zippack = {"zip": zipfile.ZipFile(contentfile), "kwargs": aliasctx["kwargs"]}
                             self.__packs__[name] = zippack
                             for initsuffix in suffixes:
                                 if initsuffix != "zip":
                                     initpath = "__init__." + initsuffix
                                     initcontentfile = self._fetch_file_from_pack(initpath, zippack["zip"], zippack["kwargs"])
-                                    # a package
-                                    module.__file__ = urlhead + "." + suffix
-                                    module.__path__ = [urlhead + "." + suffix]
-                                    exec(initcontentfile.read(), module.__dict__)
-                                    sys.modules[name] = module
-                                    return module
+                                    if initcontentfile is not None:
+                                        # a package
+                                        module.__file__ = urlhead + "." + suffix
+                                        module.__path__ = [urlhead + "." + suffix]
+                                        self._exec_module(initcontentfile.read(), module)
+                                        sys.modules[name] = module
+                                        return module
                         else:
                             # just a module
                             module.__file__ = urlhead + "." + suffix
                             delattr(module, "__path__")
-                            exec(contentfile.read(), module.__dict__)
+                            self._exec_module(contentfile.read(), module)
                             sys.modules[name] = module
                             return module
-                ## (/a.zip/b/__init__.py), b is a directory
+                # # (/a.zip/b/__init__.py), b is a directory
                 else:  # try __init__
                     for initsuffix in suffixes:
                         if initsuffix != "zip":
@@ -146,12 +153,12 @@ class __Importer__(object):
                                 # a package
                                 module.__file__ = urlhead + "/__init__." + initsuffix
                                 module.__path__ = [urlhead]
-                                exec(initcontentfile.read(), module.__dict__)
+                                self._exec_module(initcontentfile.read(), module)
                                 sys.modules[name] = module
                                 return module
 
         # search in remote
-        ## import alias
+        # # import alias
         for suffix in suffixes:
             url = urlhead + "." + suffix
             content = self._fetch_file_from_remote(url, aliasctx.get("kwargs", {}))
@@ -164,21 +171,22 @@ class __Importer__(object):
                         if initsuffix != "zip":
                             initpath = "__init__." + initsuffix
                             initcontentfile = self._fetch_file_from_pack(initpath, zippack["zip"], zippack["kwargs"])
-                            # a package
-                            module.__file__ = urlhead + "." + suffix + "/__init__." + initsuffix
-                            module.__path__ = [urlhead + "." + suffix]
-                            exec(initcontentfile.read(), module.__dict__)
-                            sys.modules[name] = module
-                            return module
+                            if initcontentfile is not None:
+                                # a package
+                                module.__file__ = urlhead + "." + suffix + "/__init__." + initsuffix
+                                module.__path__ = [urlhead + "." + suffix]
+                                self._exec_module(initcontentfile.read(), module)
+                                sys.modules[name] = module
+                                return module
                 else:  # just a module
                     module.__file__ = url
                     delattr(module, "__path__")
-                    exec(content, module.__dict__)
+                    self._exec_module(content, module)
                     sys.modules[name] = module
                     return module
-        ## import alias.b
-        ## remote /a.zip
-        ##        /b/__init__.py
+        # # import alias.b
+        # # remote /a.zip
+        # #        /b/__init__.py
         # try __init__
         for initsuffix in suffixes:
             if initsuffix != "zip":
@@ -188,7 +196,7 @@ class __Importer__(object):
                     # a package
                     module.__file__ = initurl
                     module.__path__ = [urlhead]
-                    exec(initcontent, module.__dict__)
+                    self._exec_module(initcontent, module)
                     sys.modules[name] = module
                     return module
 
@@ -200,34 +208,58 @@ class __Importer__(object):
         :param name:
         :return:
         """
-        print("load module for name:", name)
+        if __we_are_debuging__:
+            print("|-load module for name:", name)
         ret = self.exec_module(self.create_module(self.__specs__[name]))
         del self.__specs__[name]
         return ret
 
+    def _exec_module(self, content, module):
+        # we support exec py/pyjet
+        if module.__file__.endswith("pyjet"):
+            co = marshal.loads(content)
+        elif module.__file__.endswith("py"):
+            co = compile(content, module.__file__, "exec")
+        else:
+            raise ValueError("unsupported module filename suffix:", module.__file__)
+        exec(co, module.__dict__)
+
     def _fetch_file_from_pack(self, path, packfile, packctx):
+        zippw = packctx.get("zippw", None)
+        if __we_are_debuging__:
+            print("|-fetch file from pack, path:", path, "zippw:", zippw)
         try:
-            return packfile.open(path, "r", packctx.get("zippw", None))
+            return packfile.open(path, "r", zippw.encode() if zippw else None)
         except KeyError:
             return None
         except TypeError:
             try:
-                return packfile.open(path, "r", packctx.get("zippw", None).encode())
+                return packfile.open(path, "r", zippw)
             except KeyError:
                 return None
 
     def _fetch_file_from_remote(self, url, kwargs):
-        print("fetch file from remote url:", url)
+        if __we_are_debuging__:
+            print("|-fetch file from remote url:", url)
+        trytimes = kwargs.get("__trytimes__", 1)
         httpheaders = kwargs.get("httpheaders", None)
         try:
             r = requests.get(url, headers=httpheaders)
             if r.status_code == 200:
                 return r.content
             else:
-                print("get ", url, " failed,ec:", r.status_code)
+                if __we_are_debuging__:
+                    print("|-get ", url, " failed,ec:", r.status_code)
+        except (TypeError, TimeoutError) as e:
+            if trytimes < 5:
+                kwargs["__trytimes__"] = trytimes + 1
+                return self._fetch_file_from_remote(url, kwargs)
+            else:
+                raise e
         except Exception as e:
             import traceback
             traceback.print_exc()
+            raise e
 
 __importer__ = __Importer__()
 
@@ -261,5 +293,5 @@ for importer in sys.meta_path:
     if hasattr(importer, __importer__.__i_am_pygain_importer__):
         importer.find_spec = __importer__.find_spec
         break
-else: # first time load
+else:  # first time load
     sys.meta_path.append(__importer__)
