@@ -266,15 +266,13 @@ __importer__ = __Importer__()
 
 def gain(alias, baseurl, suffixes, **kwargs):
     """
-    // zh-cn
-    :param alias: 用于import时的别名
-    :param baseurl: 别名引入的基址url
-    :param suffixes: 支持的后缀模式
-    :param kwargs: 附加参数,比如
-                    zip解压密码: zippw(password)
-                    http请求头: httpheaders
+    :param alias: the import instruction's package name
+    :param baseurl: the alias's base url
+    :param suffixes: supported suffixed
+    :param kwargs: keyword arguments
+                    zip package password: zippw(password)
+                    http headers: httpheaders
     :return: None
-    // en-us
     """
     if __we_are_debuging__ is True:
         print("gain - alias:", alias, "|baseurl:", baseurl, "|suffixes:", suffixes, "|kwargs:", kwargs)
